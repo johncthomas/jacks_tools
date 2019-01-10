@@ -1,7 +1,3 @@
-import os
-#import subprocess
-#from subprocess import run
-import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import pickle
@@ -13,12 +9,20 @@ except ModuleNotFoundError:
     def adjust_text(*args, **kwargs):
         pass
 
-#v0.2
+__version__ = '0.4'
+
+#todo: sepfucntions for each table, one function that calls all, option to only return scores
+#todo: put eff and fold change on the same table (currently nans)
 
 
-def plot_volcano(esstab, savefn=None):
 
-    fig, ax = plt.subplots(1, 1, figsize=(10, 10))
+def plot_volcano(esstab, savefn=None, ax=None):
+    """Supply pandas table with 'jacks_score' and 'fdr_pos/neg' columns.
+    Returns fig, ax if no ax is supplied."""
+    if ax is None:
+        fig, ax_ = plt.subplots(1, 1, figsize=(10, 10))
+    else:
+        plt.sca(ax)
     pos = esstab['jacks_score'] > 0
     neg = ~pos
 
@@ -44,7 +48,10 @@ def plot_volcano(esstab, savefn=None):
     plt.gca().invert_yaxis()
     if savefn :
         plt.savefig(savefn)
-    return fig, ax
+    if ax is None:
+        return fig, ax_
+    else:
+        return ax
 
 
 def plot_2d_score(x_score, y_score, formatters=None, labels=None):
@@ -106,7 +113,7 @@ def tabulate(prefix):
     genes = pd.read_table(prefix + '_gene_JACKS_results.txt', sep='\t', index_col=0)
     genes_index = sorted(genes.index)
     genes = genes.reindex(genes_index)
-    genesstd = pd.read_table(prefix + '_genestd_JACKS_results.txt', sep='\t', index_col=0)
+    genesstd = pd.read_table(prefix + '_gene_std_JACKS_results.txt', sep='\t', index_col=0)
     genesstd = genesstd.reindex(genes_index)
     ps = genes / genesstd
     ps = ps.apply(norm.cdf)
@@ -120,7 +127,7 @@ def tabulate(prefix):
         sig_df.loc[:, (exp, 'fdr_neg')] = multipletests(ps[exp], method='fdr_bh')[1]
         sig_df.loc[:, (exp, 'fdr_pos')] = multipletests(1 - ps[exp], method='fdr_bh')[1]
         sig_df.loc[:, (exp, 'jacks_score')] = genes[exp]
-        sig_df.loc[:, (exp, 'std')] = genesstd
+        sig_df.loc[:, (exp, 'std')] = genesstd[exp]
 
 
 
@@ -133,7 +140,7 @@ def tabulate(prefix):
     eff_tab = pd.read_table(prefix + '_grna_JACKS_results.txt', **kwtab)
 
     for exp in ps.columns:
-        fchange_df.loc[:, (exp, 'foldchange')] = foldchange[exp]
+        fchange_df.loc[:, (exp, 'lfc')] = foldchange[exp]
         fchange_df.loc[:, (exp, 'fold_std')] = foldstd[exp]
     fchange_df.loc[:, 'gene'] = foldchange['gene']
 
@@ -144,8 +151,12 @@ def tabulate(prefix):
 
     return sig_df, efficacies, fchange_df
 
-if __name__ == '__main__':
-    pass
+
+
+
+# if __name__ == '__main__':
+#     res_dmso, eff_dmso, lfc_dmso = tabulate('/Users/johnc.thomas/Dropbox/crispr/ramsay/jacks/both_screens.matched.3_precalc_guides')
+#     print(res_dmso.head())
    #  os.chdir('/Users/johnc.thomas/Dropbox/crispr/dub1_hap1_u2os/dosage/jacks_output/')
    # #pd.read_table('hap1_DUB_1n2.48h_gene_JACKS_results.txt', sep='\t', index_col=0)
    #

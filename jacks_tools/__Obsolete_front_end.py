@@ -179,32 +179,32 @@ def run(countfile, replicatefile, guidemappingfile, rep_hdr, sample_hdr, ctrl_sa
 
 # if __name__ == '__main__':
 #
-#     # running both ramsay's screens, with sensitive guides removed...
-#     # os.chdir('/Users/johnc.thomas/Dropbox/crispr/ramsay/jacks')
-#     # os.chdir('d:/Dropbox/crispr/ramsay/jacks')
-#     bootstrappin = False
-#     os.chdir('/Users/johnc.thomas/Dropbox/crispr/dosage')
-#     countfile = '../counts_all/hap1_DUB_screens_matylda.tsv'
-#     replicatefile = 'repmap_48h.txt'
-#     outprefix = 'hap1_DUB_1n2.48h'
-#     # sgrna_reference_file = 'both_screens_D14.1_grna_JACKS_results.txt'
-#     sgrna_reference_file = None
-#
-#     rep_hdr = 'Replicate'
-#     sample_hdr = 'Sample'
-#     ctrl_sample_or_hdr = 'Control' # Give header if per sample, control sample name otherwise
-#     guidemappingfile = countfile
-#     gene_hdr = 'gene'
-#     sgrna_hdr = 'guide'
-#
-#     if os.path.isfile(outprefix+'_JACKS_results_full.pickle'):
-#         input('Results file '+outprefix+'_JACKS_results_full.pickle already exists\npress enter to overwrite.')
-#
-#     run(countfile,replicatefile,guidemappingfile,
-#         rep_hdr,sample_hdr,ctrl_sample_or_hdr,
-#         sgrna_hdr,gene_hdr,
-#         outprefix,sgrna_reference_file,
-#         boot_strap=bootstrappin)
+    # running both ramsay's screens, with sensitive guides removed...
+    # os.chdir('/Users/johnc.thomas/Dropbox/crispr/ramsay/jacks')
+    # os.chdir('d:/Dropbox/crispr/ramsay/jacks')
+    # bootstrappin = False
+    # os.chdir('/Users/johnc.thomas/Dropbox/crispr/dosage')
+    # countfile = '../counts_all/hap1_DUB_screens_matylda.tsv'
+    # replicatefile = 'repmap_48h.txt'
+    # outprefix = 'hap1_DUB_1n2.48h'
+    # # sgrna_reference_file = 'both_screens_D14.1_grna_JACKS_results.txt'
+    # sgrna_reference_file = None
+    #
+    # rep_hdr = 'Replicate'
+    # sample_hdr = 'Sample'
+    # ctrl_sample_or_hdr = 'Control' # Give header if per sample, control sample name otherwise
+    # guidemappingfile = countfile
+    # gene_hdr = 'gene'
+    # sgrna_hdr = 'guide'
+    #
+    # if os.path.isfile(outprefix+'_JACKS_results_full.pickle'):
+    #     input('Results file '+outprefix+'_JACKS_results_full.pickle already exists\npress enter to overwrite.')
+    #
+    # run(countfile,replicatefile,guidemappingfile,
+    #     rep_hdr,sample_hdr,ctrl_sample_or_hdr,
+    #     sgrna_hdr,gene_hdr,
+    #     outprefix,sgrna_reference_file,
+    #     boot_strap=bootstrappin)
 
 
     #countfile, replicatefile, guidemappingfile, rep_hdr, sample_hdr, ctrl_sample_or_hdr,
