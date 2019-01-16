@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
 import pandas as pd
 #import pickle
 from scipy.stats import norm
@@ -94,31 +95,93 @@ def plot_volcano(score_table, savefn=None, ax=None,
         return ax
 
 
-def plot_2d_score(x_score, y_score, formatters=None, labels=None):
+def scores_biplot(x, y, table=None, min_mahal:float=False, label_mahal=False,
+                  labels=None, formatters=None, ):
     """Produce biplot of 2 essentiality series.
     args:
-        x_ess, y_ess -- pd.Series with shared index that gives x and y values
-            to be plotted
-        labels -- list of gene names to be labeled on the plot
-        formatters -- list of tuples as below. format_dict is passed to
-            plt.plot(..., **format_dict)
-            [(list_of_genes, format_dict), ...]
+        x, y:
+            str that point to score sub-table column labels, or
+            pd.Series with shared index that gives x and y values
+            to be plotted.
+
+        table:
+            Score table from .tabulate(), subtables selected with x/y_score
+
+        labels:
+            list of gene names to be labeled on the plot
+
+        formatters:
+            list of tuples as below. format_dict is passed to
+            plt.plot(..., **format_dict).
+                [(list_of_genes, format_dict), ...]
+
     Formatters"""
+
     fig, ax = plt.subplots(1, 1, figsize=(8,8))
-    # plot
+
+    if table is None:
+        x_score = x
+        y_score = y
+    else:
+        x_score = table[x].jacks_score
+        y_score = table[y].jacks_score
+
+    if min_mahal is not False:
+        _, _, mahal = mahal_nocov(
+            FakeOLS(1,0), x_score, table[x].stdev, y_score, table[y].stdev
+        )
+
+        # for this we don't care about pos/neg
+        mahal = mahal.abs()
+        max_mahal = max(mahal)
+        #print(max_mahal)
+        # normalised mahaladonis for color scaling
+        nmahal = (mahal-min_mahal)/(max_mahal-min_mahal)
+        colrs = cm.viridis(nmahal) # loses the gene name indicies
+        labels_maybe = []
+        # RGBA
+        grey = (0.68, 0.68, 0.68, 1)
+        for i, m in enumerate(nmahal):
+            # m == mahal-minmahal
+            if m < 0:
+                colrs[i] = grey
+            else:
+                labels_maybe.append(nmahal.index[i])
+    else:
+        colrs = None
+
+    if label_mahal:
+        if labels:
+            labels.extend(labels_maybe)
+        else:
+            labels = labels_maybe
+
+
+
     if not formatters:
+        # all genes with empty format spec
         formatters = [(x_score.index, {})]
     for genes, formats in formatters:
         if 'marker' not in formats:
             formats['marker'] ='o'
-        plt.plot(x_score.loc[genes], y_score.loc[genes], linestyle='none', **formats)
+        plt.scatter(x_score.loc[genes], y_score.loc[genes], c=colrs, **formats)
 
+    # plot a square Axes with orientation lines
     lim = ax.axis()
     minlim = min(lim[0], lim[2])
     maxlim = max(lim[1], lim[3])
     plt.plot([minlim, maxlim], [minlim, maxlim], 'k--', alpha=0.2)
     plt.plot([0, 0], [minlim, maxlim], 'g--')
     plt.plot([minlim, maxlim], [0, 0], 'g--')
+
+    if colrs is not None:
+        sm = plt.cm.ScalarMappable(cmap=cm.get_cmap('viridis'))
+        sm.set_array([])
+        cb = plt.colorbar(sm, fraction=0.03, pad=0.01, aspect=5)
+
+        cb.set_ticks([0.0, 1.0])
+        cb.set_ticklabels([str(round(min_mahal, 2)),
+                           str(round(max_mahal, 2))])
 
     # labels
     txt = []
@@ -127,8 +190,9 @@ def plot_2d_score(x_score, y_score, formatters=None, labels=None):
         for lab in set(labels):
             txt.append(plt.text(x_score[lab], y_score[lab], lab))
 
-    plt.tight_layout()
+
     adjust_text(txt, arrowprops=dict(arrowstyle='->'))
+
 
     return fig, ax
 
@@ -167,7 +231,7 @@ def tabulate(prefix):
         sig_df.loc[:, (exp, 'fdr_neg')] = multipletests(ps[exp], method='fdr_bh')[1]
         sig_df.loc[:, (exp, 'fdr_pos')] = multipletests(1 - ps[exp], method='fdr_bh')[1]
         sig_df.loc[:, (exp, 'jacks_score')] = genes[exp]
-        sig_df.loc[:, (exp, 'std')] = genesstd[exp]
+        sig_df.loc[:, (exp, 'stdev')] = genesstd[exp]
 
 
 
@@ -190,4 +254,81 @@ def tabulate(prefix):
     efficacies.loc[:, 'gene'] = fchange_df['gene']
 
     return sig_df, efficacies, fchange_df
+
+
+def dist_to_line(ols, p):
+    """ols: sm.OLS results obj
+    p: a tuple giving xy.
+    doesn't expect endogenous constant"""
+    p = np.array(p)
+    x = p[0]
+    y = p[1]
+    # get the points that define the line
+    a = np.array([x, ols.predict(x)])
+    b = np.array([y, ols.predict(y)])
+
+    d = np.cross(b - a, p - a) / np.linalg.norm(b - a)
+
+    return d
+
+
+class FakeOLS:
+    def __init__(self, slope, intcpt):
+        self.slope = slope
+        self.intcpt = intcpt
+
+    def predict(self, x):
+        # assert len(x) == 2
+        # x = x[1]
+        return x * self.slope + self.intcpt
+
+
+def closest_point(ols, xs, ys, verbose=False):
+    from shapely.geometry import LineString, Point
+    # xs and ys are the gene essentialities for ctrl & exp
+    # ols is the statsmodel.OLS object giving the trend line for xs&ys
+    # FakeOLS can be used to compare to x=y slope
+    closest_x = []
+    closest_y = []
+    mins = min(min(xs), min(ys))
+    maxs = max(max(xs), max(ys))
+
+    for x, y in zip(xs, ys):
+        line = LineString([(mins, ols.predict(mins)), (maxs, ols.predict(maxs))])
+        p = Point(x, y)
+        pj = line.project(p)
+        cp = line.interpolate(pj)
+        closest_x.append(cp.x)
+        closest_y.append(cp.y)
+        if verbose:
+            print(p, '->', cp)
+    return np.array(closest_x), np.array(closest_y)
+
+
+def mahal_nocov(ols, xs, xs_sd, ys, ys_sd, **cp_kwargs):
+
+    # get closest points, calc significance
+    cxs, cys = closest_point(ols, xs, ys, **cp_kwargs)
+    mahal_dist = np.sqrt((cxs - xs) ** 2 / xs_sd + (cys - ys) ** 2 / ys_sd)
+    # p: a tuple giving xy. a, b, start and stop of line
+    minx = min(min(xs), min(ys))
+    maxx = max(max(xs), max(ys))
+    a, b = [(minx, ols.predict(minx)), (maxx, ols.predict(maxx))]
+    a, b = np.array(a), np.array(b)
+    points = [np.array(p) for p in zip(xs, ys)]
+    euc_dist = [np.cross(b - a, p - a) / np.linalg.norm(b - a) for p in points]
+    euc_dist = np.array(euc_dist)
+    # get significance
+    ps = 1 - pd.Series(mahal_dist).apply(norm.cdf)
+
+    # return negative distance for the depleted genes
+    depleted = euc_dist < 0
+    mahal_dist[depleted] = 0 - mahal_dist[depleted]
+
+    return euc_dist, ps, pd.Series(mahal_dist)
+
+
+
+
+
 

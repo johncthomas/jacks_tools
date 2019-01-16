@@ -1,1 +1,1 @@
-from .tools import tabulate, plot_volcano, plot_2d_score
+from .tools import tabulate, plot_volcano, scores_biplot
