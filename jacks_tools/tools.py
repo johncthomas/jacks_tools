@@ -1,51 +1,91 @@
+import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
-import pickle
+#import pickle
 from scipy.stats import norm
-from statsmodels.stats.multitest import multipletests
+from statsmodels.stats.multitest import multipletests#
 try:
     from adjustText import adjust_text
 except ModuleNotFoundError:
     def adjust_text(*args, **kwargs):
         pass
 
-__version__ = '0.4'
+__version__ = '0.5'
 
 #todo: sepfucntions for each table, one function that calls all, option to only return scores
 #todo: put eff and fold change on the same table (currently nans)
+#todo pass ax to plot2d
+#todo bootstrapping?
 
+# in 0.5
+# refactor "esstab" to "score_table"
 
-
-def plot_volcano(esstab, savefn=None, ax=None):
+def plot_volcano(score_table, savefn=None, ax=None,
+                 label_deplet = 0, label_enrich = 0, other_labels=None,
+                 p_thresh = 0.05):
     """Supply pandas table with 'jacks_score' and 'fdr_pos/neg' columns.
     Returns fig, ax if no ax is supplied."""
     if ax is None:
         fig, ax_ = plt.subplots(1, 1, figsize=(10, 10))
     else:
         plt.sca(ax)
-    pos = esstab['jacks_score'] > 0
+
+    score_table = score_table.copy()
+
+    pos = score_table['jacks_score'] > 0
     neg = ~pos
 
-    faces = dict(facecolors='none', edgecolors='b')
-    plt.scatter(esstab.loc[pos, 'jacks_score'], esstab.loc[pos, 'fdr_pos'], **faces)
-    plt.scatter(esstab.loc[neg, 'jacks_score'], esstab.loc[neg, 'fdr_neg'], **faces)
-    plt.yscale('log')
-
-    plt.plot([min(esstab['jacks_score']), max(esstab['jacks_score'])],
-             [0.05, 0.05], 'k--')
-
     # get lowest not zero and set zeroes to 1/10 that value
-    min_pos = min(esstab.loc[esstab['fdr_pos'] > 0, 'fdr_pos'])
-    min_neg = min(esstab.loc[esstab['fdr_neg'] > 0, 'fdr_neg'])
-    print(min_neg, min_pos)
+    min_pos = min(score_table.loc[score_table['fdr_pos'] > 0, 'fdr_pos'])
+    min_neg = min(score_table.loc[score_table['fdr_neg'] > 0, 'fdr_neg'])
+    #print(min_neg, min_pos)
     for fdri, fdr in enumerate(['fdr_pos', 'fdr_neg']):
-        esstab.loc[esstab[fdr] == 0, fdr] = (min_pos, min_neg)[fdri] / 10
+        score_table.loc[score_table[fdr] == 0, fdr] = (min_pos, min_neg)[fdri] / 10
 
-    plt.xlabel('Essentiality')
-    plt.ylabel('FDR')
+    for mask, fdr in (pos, 'fdr_pos'), (neg, 'fdr_neg'):
+        score_table.loc[mask, 'fdr'] = score_table.loc[mask, fdr]
 
-    plt.ylim(min(min_pos, min_neg) / 10)
-    plt.gca().invert_yaxis()
+
+    score_table.loc[:, 'fdr'] = score_table[fdr].apply(lambda x: -np.log10(x))
+
+    faces = dict(facecolors='none', edgecolors='b')
+    # plt.scatter(score_table.loc[pos, 'jacks_score'], score_table.loc[pos, 'fdr_pos'], **faces)
+    # plt.scatter(score_table.loc[neg, 'jacks_score'], score_table.loc[neg, 'fdr_neg'], **faces)
+    plt.scatter(score_table.jacks_score, score_table.fdr, **faces)
+
+    p = -np.log10(p_thresh)
+
+    plt.plot([min(score_table['jacks_score']), max(score_table['jacks_score'])],
+             [p, p], 'k--')
+
+    # label the top and bottom most, if specified
+    texts = []
+    texts_done = []
+    # get subtables
+    dep = score_table.sort_values('jacks_score').head(label_deplet)
+    enr = score_table.sort_values('jacks_score').tail(label_enrich)
+    for stab in dep, enr:
+        for lab, row in stab.iterrows():
+            if row.fdr < p:
+                continue
+            texts_done.append(lab)
+            texts.append(plt.text(row.jacks_score, row.fdr, lab))
+    # label additional genes
+    if other_labels:
+        for lab, row in score_table.loc[other_labels, :].iterrows():
+            if lab in texts_done:
+                continue
+            texts.append(
+                plt.text(score_table.loc[lab, 'jacks_score'],
+                         score_table.loc[lab, 'fdr'],
+                         lab)
+            )
+    if texts:
+        adjust_text(texts, arrowprops=dict(arrowstyle='->', color='red'))
+
+    plt.xlabel('JACKS score')
+    plt.ylabel('-log10(FDR)')
+
     if savefn :
         plt.savefig(savefn)
     if ax is None:
@@ -64,7 +104,7 @@ def plot_2d_score(x_score, y_score, formatters=None, labels=None):
             plt.plot(..., **format_dict)
             [(list_of_genes, format_dict), ...]
     Formatters"""
-    fig, ax = plt.subplots(1, 1, figsize=(10, 10))
+    fig, ax = plt.subplots(1, 1, figsize=(8,8))
     # plot
     if not formatters:
         formatters = [(x_score.index, {})]
@@ -151,38 +191,3 @@ def tabulate(prefix):
 
     return sig_df, efficacies, fchange_df
 
-
-
-
-# if __name__ == '__main__':
-#     res_dmso, eff_dmso, lfc_dmso = tabulate('/Users/johnc.thomas/Dropbox/crispr/ramsay/jacks/both_screens.matched.3_precalc_guides')
-#     print(res_dmso.head())
-   #  os.chdir('/Users/johnc.thomas/Dropbox/crispr/dub1_hap1_u2os/dosage/jacks_output/')
-   # #pd.read_table('hap1_DUB_1n2.48h_gene_JACKS_results.txt', sep='\t', index_col=0)
-   #
-   #  for prefix in 'hap1_DUB_1n2.48h', 'hap1_DUB_1n2.dmso':
-   #      ess, eff, fc = tabulate(prefix)
-   #      ess.to_csv(prefix+'.ess_table.csv')
-   #      eff.to_csv(prefix+'.efficacy.csv')
-   #      fc.to_csv(prefix+'.logFC.csv')
-
-    # pass
-    # #
-    # # os.chdir('/Users/johnc.thomas/becca1')
-    # # scripts_dir = '/Users/johnc.thomas/Applications/guide_trimming_scripts'
-    # #
-    # # jkfn = './jacks/48hrWRef2_JACKS_results_full.pickle'
-    # #
-    # # # check efficacy file guides vs becs data
-    # # guide_eff = pd.read_table('/Users/johnc.thomas/Dropbox/crispr/gRNA_efficacy_w_X2.txt', sep='\t')
-    # #
-    # # with open(jkfn, 'rb') as f:
-    # #     jkres = jacks_results, cell_lines, grnas = pickle.load(f)
-    # #
-    # # with open('./jacks/all_counts.tsv') as f:
-    # #     counts = pd.read_table(f, index_col=0)
-    # # counts.head()
-    # #
-    # # ess_tables, guide_tables = tabulate_jacksres(*jkres)
-    # # # for group, tab in ess_tables.items():
-    # # #     print(tab.isna().sum())

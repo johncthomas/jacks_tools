@@ -4,7 +4,7 @@ from setuptools import setup
 #TODO: import names into main package, make adjustText an option module
 
 setup(name='jacks_tools',
-      version='0.1.6',
+      version='0.1.7',
       description='Post-processing tools for JACKS (felicityallen/JACKS).',
       author='John C. Thomas',
       author_email='jcthomas000@gmail.com',
